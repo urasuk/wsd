@@ -1,8 +1,9 @@
+# https://github.com/urasuk/wsd.git
 import json
 import random
 
 # Specify the file path
-input_file_path = 'data/ua_gec.disamb.jsonl'
+input_file_path = 'data/input_dfs/ua_gec.disamb.jsonl'
 output_file_path = 'data/test_data.json'
 
 
@@ -52,14 +53,6 @@ def read_and_display_instances(file_path,  num_instances=READ_LINES_NUM):
                 output_file.write('\n')  # Add a newline after each instance
 
 
-if input(f'Do you want to mark raw dataset ({READ_LINES_NUM} sentences) ? [yes/no] : ') == 'yes':
-    # Clear the content of the output file before starting
-    open(output_file_path, 'w').close()
-    # Call the function to read, display, and save instances
-    read_and_display_instances(input_file_path)
-    # print(f'incorrect_matches_count: {incorrect_matches_count}')
-
-
 def accuracy(pred, target):
     # Ensure the lengths of both lists are the same
     if len(pred) != len(target):
@@ -89,9 +82,16 @@ def model_random_sense(file_path):
     return predictions, correct_senses
 
 
-predictions, correct_senses = model_random_sense(output_file_path)
-acc = accuracy(predictions, correct_senses)
+if __name__ == '__main__':
+    if input(f'Do you want to mark raw dataset ({READ_LINES_NUM} sentences) ? [yes/no] : ') == 'yes':
+        # Clear the content of the output file before starting
+        open(output_file_path, 'w').close()
+        # Call the function to read, display, and save instances
+        read_and_display_instances(input_file_path)
+        # print(f'incorrect_matches_count: {incorrect_matches_count}')
 
-print(f'Accuracy [random]: {acc} ')
+    predictions, correct_senses = model_random_sense(output_file_path)
+    acc = accuracy(predictions, correct_senses)
 
-# https://github.com/urasuk/wsd.git
+    print(f'Accuracy [random]: {acc} ')
+
