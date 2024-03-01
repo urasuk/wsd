@@ -3,9 +3,11 @@
 #   формуємо дата фрейм, який об'єднює усі сутності, які мають однакове поле "lemma"
 
 import json
+import stats as stats_data
 
-input_file_path = "data/final_results/sum14_filtered.json"
-output_file_path = "data/final_results/sum14_merged.json"
+
+input_file_path = stats_data.filtered_file_path
+output_file_path = stats_data.merged_file_path
 
 
 def merge_objects(objects):
@@ -34,6 +36,14 @@ def main():
     # Extract values and save them to a new JSON file
 
     output_data = list(merged_objects.values())
+
+    # Є такі омоніми (наприклад АВІЗНИЙ), які для 2-го prime сенсу не мають прикладів,
+    # а отже 2 омонім не додається в датасет - і датасет має лему з 1 сенсом
+    # тому треба зробити фінальний фільтр
+    output_data = [entry for entry in output_data if len(entry['synsets']) != 1]
+    # before: 34169
+    # after:  33884
+
     with open(output_file_path, 'w', encoding='utf-8') as output_file:
         for entry in output_data:
             json.dump(entry, output_file, ensure_ascii=False)

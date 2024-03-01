@@ -1,14 +1,15 @@
 import json
+import stats as stats_data
 
-input_file_path = "data/input_dfs/sum_14_final.jsonlines"
-output_file_path = "data/final_results/sum14_filtered.json"
+input_file_path = stats_data.raw_file_path
+output_file_path = stats_data.filtered_file_path
 
-MIN_LEMMA_LEN = 3
-MIN_GLOSS_LEN = 5
-MIN_EXAMPLE_LEN = 10
-MIN_EXAMPLE_NUM = 1
-MIN_SYNSET_NUM = 2
-MIN_SYNSET_NUM_PRIME = 1
+MIN_LEMMA_LEN = stats_data.MIN_LEMMA_LEN
+MIN_GLOSS_LEN = stats_data.MIN_GLOSS_LEN
+MIN_EXAMPLE_LEN = stats_data.MIN_EXAMPLE_LEN
+MIN_EXAMPLE_NUM = stats_data.MIN_EXAMPLE_NUM
+MIN_SYNSET_NUM = stats_data.MIN_SYNSET_NUM
+MIN_SYNSET_NUM_PRIME = stats_data.MIN_SYNSET_NUM_PRIME
 
 
 def show_json_pretty(instance):
@@ -79,7 +80,7 @@ def examples_handling(examples_arr, new_synset):
     return True
 
 
-def filter_entries(entry):
+def filter_entry(entry):
 
     accent_positions = find_acute_accent_positions(entry['lemma'])
     lemma_acute_removed = remove_acute_accents(entry['lemma'], accent_positions)
@@ -136,7 +137,7 @@ def main():
             entry = json.loads(line)  # Parse the JSON object from the line
             # if entry["lemma"] == "А":  # АБА́З ПО́ТЯГ
             #     print("❤️‍  🔥")
-            filtered_entry = filter_entries(entry)
+            filtered_entry = filter_entry(entry)
             if filtered_entry:
                 json.dump(filtered_entry, output_file, ensure_ascii=False)
                 output_file.write('\n')
