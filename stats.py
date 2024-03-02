@@ -1,7 +1,12 @@
 raw_file_path = "data/input_dfs/sum_14_final.jsonlines"
 filtered_file_path = "data/final_results/sum14_filtered.json"
 merged_file_path = "data/final_results/sum14_merged.json"
-pairs_file_path = "data/final_results/sum14_pairs.json"
+pairs_file_path = "data/final_results/sum14_pairs.jsonl"
+train_file_path = "data/final_results/sum14_pairs-train.jsonl"
+test_file_path = "data/final_results/sum14_pairs-test.jsonl"
+
+filtered_extra_file_path = "data/final_results/sum14_filtered-extra.json"
+
 
 MIN_LEMMA_LEN = 3
 MIN_GLOSS_LEN = 5

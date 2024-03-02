@@ -6,7 +6,9 @@ import json
 import stats as stats_data
 
 
-input_file_path = stats_data.filtered_file_path
+# input_file_path = stats_data.filtered_file_path
+input_file_path = stats_data.filtered_extra_file_path
+
 output_file_path = stats_data.merged_file_path
 
 
@@ -17,11 +19,13 @@ def merge_objects(objects):
         lemma = obj['lemma']
 
         if lemma not in merged_objects:
-            merged_objects[lemma] = {'lemma': lemma, 'synsets': [], 'accent_positions': []}
+            merged_objects[lemma] = {'lemma': lemma, 'synsets': [], 'accent_positions': [], 'synonyms': []}
 
         merged_objects[lemma]['synsets'].extend(obj.get('synsets', []))
         acc_pos = obj.get('accent_positions', [])
         merged_objects[lemma]['accent_positions'].extend(acc_pos if acc_pos else [])
+        merged_objects[lemma]['synonyms'].extend(obj.get('synonims', [])) # !!!
+
 
     return merged_objects
 
