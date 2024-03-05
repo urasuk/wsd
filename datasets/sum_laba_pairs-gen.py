@@ -1,6 +1,6 @@
 import stats as stats_data
 import json
-import random
+import numpy as np
 from itertools import combinations
 
 
@@ -37,7 +37,8 @@ def create_siamese_dataset(data):
                           "label": label, 
                           "lemma": pair[0]["lemma"], 
                           "synonyms": pair[0]["synonyms"]})  # !!!
-        dataset.extend(pairs)
+        # dataset.extend(pairs)
+        dataset.append({examples[0]["lemma"]: pairs}) #% 2024-03-03: Proper train/test split (по лемах)
 
     return dataset
 
@@ -56,7 +57,11 @@ def main():
             json.dump(entry, output_file, ensure_ascii=False)
             output_file.write('\n')
 
-    print(f"Paraprases dataset length: {len(siamese_dataset)}")
+    # print(f"Paraprases dataset length: {len(siamese_dataset)}")
+    #% 2024-03-03: Proper train/test split (по лемах)
+    lema_pair_num = [len(d[key]) for d in siamese_dataset for key in d if isinstance(d[key], list)]
+    print(f"Paraprases dataset length: {np.array(lema_pair_num).sum()}")
+
     print(f"Siamese dataset saved to {output_file_path}")
 
 
