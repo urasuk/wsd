@@ -3,9 +3,14 @@ import json
 import numpy as np
 from itertools import combinations
 
+WITH_FORMS = True
 
 input_file_path = stats_data.merged_file_path
 output_file_path = stats_data.pairs_file_path
+
+if WITH_FORMS:
+    input_file_path = stats_data.lcopf_forms_found_file_path
+    output_file_path = stats_data.pairs_forms_file_path
 
 def get_unique(original_list):
     seen = []
@@ -18,10 +23,17 @@ def create_siamese_dataset(data):
         entry_examples = []
         for sens_id, synset in enumerate(entry['synsets']):
             for example in synset['examples']:
+                # if not WITH_FORMS:
                 entry_examples.append({"example": example["ex_text"],
                                        "sense_id": sens_id, 
                                        "lemma": entry["lemma"],
                                        "synonyms": get_unique(entry["synonyms"]) }) # !!!
+                # if WITH_FORMS:
+                #     entry_examples.append({"example": example["ex_text"],
+                #                         "sense_id": sens_id, 
+                #                         "lemma": entry["lemma"],
+                #                         "synonyms": get_unique(entry["synonyms"]),
+                #                         "forms": entry["forms"]})
         all_examples.append(entry_examples)
 
     dataset = []
@@ -32,11 +44,19 @@ def create_siamese_dataset(data):
             sen1 = pair[0]["example"]
             sen2 = pair[1]["example"]
             label = 1 if pair[0]["sense_id"] == pair[1]["sense_id"] else 0
+
+            # if not WITH_FORMS:
             pairs.append({"sentence1": sen1,
                           "sentence2": sen2, 
                           "label": label, 
                           "lemma": pair[0]["lemma"], 
                           "synonyms": pair[0]["synonyms"]})  # !!!
+    
+            # if WITH_FORMS:
+            #     lemma_forms = pair[0]["forms"]
+
+            #     pass
+
         # dataset.extend(pairs)
         dataset.append({examples[0]["lemma"]: pairs}) #% 2024-03-03: Proper train/test split (по лемах)
 

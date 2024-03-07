@@ -38,7 +38,7 @@ def remove_acute_accents(input_string, accent_positions=None):
 
 def remove_non_ukrainian_symbols(input_string):
     # allowed_symbols = set("́-")  # Acute accent and hyphen are allowed
-    allowed_symbols = set("-")  # Acute accent and hyphen are allowed
+    allowed_symbols = set("-'")  # hyphen are allowed ТА АПОСТРОФ 🔥
 
     ukrainian_letters = set("АБВГҐДЕЄЖЗИIІЇЙКЛМНОПРСТУФХЦЧШЩЬЮЯабвгґдеєжзиiіїйклмнопрстуфхцчшщьюя")
 

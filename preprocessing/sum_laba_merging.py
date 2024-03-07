@@ -46,7 +46,7 @@ def main():
     # тому треба зробити фінальний фільтр
     output_data = [entry for entry in output_data if len(entry['synsets']) != 1]
     # before: 34169
-    # after:  33884
+    # after:  33884 (33887 - new quantity after fixing апострофи в sum_laba_filtering.py)
 
     with open(output_file_path, 'w', encoding='utf-8') as output_file:
         for entry in output_data:

@@ -1,21 +1,21 @@
 # ============================ RESULT OF EXECOTION get_stats.py ============================
 # Statistics for the number of synsets per lemma:
-# mean: 2.7299905560146382
-# std: 1.4352046568160863
+# mean: 2.729896420456222
+# std: 1.4351417262143809
 # min: 2
 # max: 24
 # q1: 2.0
 # q3: 3.0
 
 # Statistics for the number of examples per lemma:
-# mean: 3.0909267807530565
-# std: 2.421298795506056
+# mean: 3.090943485968781
+# std: 2.42128175037582
 # min: 1
 # max: 33
 # q1: 1.0
 # q3: 4.0
 
-# Total pairs number: 2216636     моя оцінка
+# Total pairs number: 2216671 (було 2216636)     моя оцінка
 # ============================ ++++++++++++++++++++++++++++++++ ============================
 
 
@@ -32,6 +32,8 @@ def extract_info(data):
     num_examples_list = [len(synset['examples']) for entry in data for synset in entry['synsets']]
     return {'synsets': num_synsets_list,
             "examples": num_examples_list }
+    # return {"сенсів": num_synsets_list,
+    #         "прикладів": num_examples_list }
 
 
 def calc_stats(num_items_list):
@@ -68,7 +70,8 @@ def plot(data, label='', title=''):
     plt.bar(unique_values, counts, width=width, color='blue', alpha=0.7)
     plt.title(title)
     plt.xlabel(label)
-    plt.ylabel("Number of lemmas")
+    # plt.ylabel("Number of lemmas")
+    plt.ylabel("К-сть лем")
     
     # Add labels above each bar
     for i, count in enumerate(counts):
@@ -109,7 +112,10 @@ def main():
     for label, num_item_list in info.items():
         stats = calc_stats(num_item_list)
         print_results(stats, label)
-        plot(num_item_list, label=f'Number of {label} per lemma', title=f'Histogram of {label} per lemma')
+        # plot(num_item_list, label=f'Number of {label} per lemma', title=f'Histogram of {label} per lemma')
+        label_text = "сенсів" if label == "synsets" else "прикладів"
+        plot(num_item_list, label=f'К-сть {label_text} на лему', title=f'Гістограма к-сті {label_text} на лему')
+
 
     print(f"Total pairs number: {get_total_pairs_num(data)}")
 
