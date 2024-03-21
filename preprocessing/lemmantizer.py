@@ -45,7 +45,7 @@ class Lemmatizer:
             print(f"🥶 ПРОБЛЕМА ЩО ЛЕМИ МАЮТЬ В synonyms такі леми, яких нема в merged_df: {e}") # наприклад ЗАМІ́РИТИ
             return False
     
-    def remove_punctuation(self, text, lemma):
+    def remove_punctuation(self, text):
         # Define the punctuation characters to remove
         punctuation_to_remove = set(";:,.!\"?/“”()«»") # -
 
@@ -61,33 +61,77 @@ class Lemmatizer:
 
         return ''.join(result)
 
+    def remove_extra_spaces(self, sentence):
+        # Використовуємо регулярний вираз для заміни двох або більше пробілів підряд на один пробіл
+        return re.sub(r'\s{2,}', ' ', sentence).strip()
+
+    def find_targets_general_position(self, sentence):
+        words = sentence.split()
+        indices = []
+        start = 0
+        for w in words:
+            end = start + len(w) - 1
+            if len(w) >= 3:  # Фільтрація за довжиною слова
+                indices.append((w, start, end))
+            start = end + 2  # додаємо 1 за словом і 1 за пробілом
+        return indices
+
+    def find_targets_specific_position(self, targets_with_indeces):
+        result_data = []
+        for target, idx_start_gen, idx_end_gen in targets_with_indeces:
+            target_cleaned = self.remove_punctuation(target)
+            idx_start_sub = target.find(target_cleaned)
+            idx_end_sub = idx_start_sub + len(target_cleaned) - 1
+            result_data.append((target_cleaned,
+                               idx_start_gen+idx_start_sub,
+                               idx_start_gen+idx_end_sub))
+        return result_data
+
+
     def get_target_idx(self, sentence_input, lemma):
-        sentence = sentence_input.lower()
+        # sentence = sentence_input.lower() #? 📍
+        sentence = sentence_input
+
+        targets_with_idxs_gen = self.find_targets_general_position(sentence)
+        targets_with_idxs = self.find_targets_specific_position(targets_with_idxs_gen)
+
         # Tokenize the sentence into words
-        words = [self.remove_punctuation(word, lemma) for word in sentence.split()]
+        # targets = [self.remove_punctuation(word) for word in sentence.split()]
 
         target_start_idx = -1
         target_end_idx = -1
-        # target_start_pos = -1
-        # target_end_pos = -1
 
-        if lemma == 'замірити':
-            print("bug")
+        # if lemma == 'замірити':
+        #     print("bug")
 
         # ашгабатський абатський 🤒
         counter = 0
-        for i, word in enumerate(words):
-            # if word.startswith(lemma):
-            if self.is_target_in_lemma_forms(word, lemma) or lemma in word: 
+        for i, (target, s_idx, e_idx) in enumerate(targets_with_idxs):
+            target_lower = target.lower() #? 📍
+            if self.is_target_in_lemma_forms(target_lower, lemma) \
+               or (lemma in target_lower and target_lower.find('-') != -1 and lemma.find('-') != -1): 
+               #? пробую новий підхід
+                
+                # or lemma in word:
                 #? or lemma in word:  автократ: правителя-автократа правителяавтократа
+                #! ⭐️ призвело до наступної проблеми:
+                # sent1 Провести судно через скелясті вузькі ✅ворота✅ з підводними рифами і мілинами вимагало від капітана великої майстерності та досвіду
+                # sent2 Хлопці грали у футбола  . ⛔️Ворота⛔️рем був Василь... М'яч летів просто на ✅ворота✅
+
+
                 # target_start_idx = i
-                # target_end_idx = i + len(word.split("-"))  # Consider hyphenated words
-                target_start_idx = sentence.find(word) # , target_start_pos + 1
-                target_end_idx = target_start_idx + len(word) - 1
+                # target_end_idx = i + len(target.split("-"))  # Consider hyphenated words
+
+                #! ⭐️ another problem
+                # target_start_idx = sentence.find(target) # , target_start_pos + 1
+                # target_end_idx = target_start_idx + len(target) - 1
+                target_start_idx = s_idx
+                target_end_idx = e_idx
 
                 counter+=1
                 if counter > 2:
                     print(f'🤢 {sentence} | {lemma}')
+                    break
                 # ! випадок коли в речені декілька лем , треба брати мабуть усіх їх позиції щоб модель всі враховувала
                 # 🤢 дзвоном скликався народ на віче. дзвоном вказували дорогу подорожнім, що заблукали в негоді. дзвоном оповіщався народ про перемогу і віталося переможне повернення полків з війни | дзвін
                 
@@ -96,8 +140,6 @@ class Lemmatizer:
         return {
             "target_start_idx": target_start_idx,
             "target_end_idx": target_end_idx,
-            # "target_start_pos": target_start_pos,
-            # "target_end_pos": target_end_pos
         }
 
 
@@ -106,9 +148,11 @@ def df_lemmantization(pairs_df, lemmatizer):
     bad_data = []
 
     for i, pair in enumerate(pairs_df):
+        pair["sentence1"] = lemmatizer.remove_extra_spaces(pair["sentence1"])
+        pair["sentence2"] = lemmatizer.remove_extra_spaces(pair["sentence2"])
         sent1 = pair["sentence1"]
         sent2 = pair["sentence2"]
-        lemma = pair["lemma"]
+        # lemma = pair["lemma"]
 
         # if lemma == 'автократ' and \
         #    sent1 == 'Перед своїм вторгненням до Греції східний автократ наслухався порад, як позбавити еллінів продовольчої бази, і тверезо переслідував цю стратегічну мету' and \
@@ -117,19 +161,19 @@ def df_lemmantization(pairs_df, lemmatizer):
         synonyms = pair["synonyms"]
         sent1_target_pos = False
         sent2_target_pos = False
+        
+
         for synonym in synonyms:
             if not sent1_target_pos:
                 sent1_target_pos = lemmatizer.get_target_idx(sent1, synonym["lemma"])
             if not sent2_target_pos:
                 sent2_target_pos = lemmatizer.get_target_idx(sent2, synonym["lemma"])
 
-        if sent1_target_pos == False:
-            # print(f'NO POSITIONS FOUND FOR SENT_1 | {sent1} | {lemma}')
-            pass
+        # if sent1_target_pos == False:
+        #     print(f'NO POSITIONS FOUND FOR SENT_1 | {sent1} | {lemma}')
             
-        if sent2_target_pos == False:
-            # print(f'NO POSITIONS FOUND FOR SENT_2 | {sent2} | {lemma}')
-            pass
+        # if sent2_target_pos == False:
+        #     print(f'NO POSITIONS FOUND FOR SENT_2 | {sent2} | {lemma}')
             
         if sent1_target_pos == False or sent2_target_pos == False:
             bad_data.append(pair)
@@ -149,6 +193,11 @@ def main():
 
     # Lemmatize a word
     # res = lemmatizer.get_target_idx(".,лікарка-тому? потягами,.", "потяг")
+    # res = lemmatizer.get_target_idx("Хлопці грали у футбола . Воротарем був Василь... М'яч летів просто на ворота",
+    #                                 "ворота")
+    
+    # res = lemmatizer.get_target_idx("Од дороги його відокремлювала неглибока стара канава, поросла ліщиною і лозами", 
+                                    # "відокремлювати")
     # print(res)
 
     # =============================================================================
@@ -170,7 +219,8 @@ def main():
             json.dump(entry, output_file, ensure_ascii=False)
             output_file.write('\n')
 
-    #* Test: good [267_913] | bad [[161_25]]
+    #* Test: good [267_913] | bad [[16_125]]
+    #* after changing: Test: good [264_518] | bad [[19_520]]
     print(f"Test: good [{len(test_good)}] | bad [[{len(test_bad)}]]")
     # =============================================================================
 
@@ -192,6 +242,7 @@ def main():
             output_file.write('\n')
 
     #* Train: good [802_065] | bad [[50_045]]
+    #* after changing: Train: good [797_629] | bad [[54_481]]
     print(f"Train: good [{len(train_good)}] | bad [[{len(train_bad)}]]")
     # =============================================================================
 
