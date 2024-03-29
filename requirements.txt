@@ -48,3 +48,8 @@ urllib3==2.2.0
 w3lib==2.1.2
 zipp==3.17.0
 zope.interface==6.2
+
+transformers==4.39.0
+datasets==2.18.0
+dill==0.3.8
+evaluate==0.4.1
