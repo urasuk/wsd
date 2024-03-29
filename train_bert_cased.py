@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # !pip install datasets evaluate transformers[sentencepiece]
 
+import os
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -15,19 +16,17 @@ import matplotlib.pyplot as plt
 from evaluate import evaluate_model 
 
 
-# ❌ ЦІ КОНСТАНТИ ВИ ЗМІНІТЬ НА ТО, ЯК ВАМ ПОТРІБНО 
-FILE_PATH_TRAIN_DF = "/content/drive/MyDrive/wsd_yray/targets_df_train.jsonl"
-FILE_PATH_TEST_DF = "/content/drive/MyDrive/wsd_yray/targets_df_test.jsonl"
+FILE_PATH_TRAIN_DF = "./data/drive/targets_df_train.jsonl"
+FILE_PATH_TEST_DF = "./data/drive/targets_df_test.jsonl"
 data_files = {
     "train": FILE_PATH_TRAIN_DF, 
     "test":  FILE_PATH_TEST_DF,
 }
-FILE_PATH_TO_SAVE_MODEL = '/content/drive/MyDrive/wsd_yray/my_model.pth'
+FILE_PATH_TO_SAVE_MODEL = './weights/my_model.pth'
 EPOCH_NUM = 10
 LEARNING_RATE = 0.001
 BATCH_SIZE = 64
-# ❌ якщо можна (хоча я стараюся зберігати і модель і історію train_losses та train_accuracies)
-PLOT_LOSS_AND_ACC = False 
+PLOT_LOSS_AND_ACC = True
 
 checkpoint = "bert-base-multilingual-cased"
 
@@ -160,6 +159,7 @@ def train(model, train_dataloader, device, optimizer, criterion, num_epochs):
             running_loss += loss.item()
 
             # Calculate the number of correct predictions for accuracy
+            # TODO: Outputs are float numbers that will never equal label (0 or 1) exactly.
             correct_predictions += (outputs == batch_labels["labels"]).sum().item()
             total_samples += len(batch_labels)
 
@@ -196,6 +196,8 @@ def plot_loss_accuracy(train_losses, train_accuracies):
     plt.show()
 
 def main():
+    os.makedir(os.path.dirname(FILE_PATH_TO_SAVE_MODEL), exist_ok=True)
+
     # Load the dataset
     targets_datasets = load_dataset("json", data_files=data_files, )
 
