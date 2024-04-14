@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import AutoModel, AutoTokenizer
-import numpy as np
 from datasets import load_dataset
 from transformers import DataCollatorWithPadding
 from torch.utils.data import DataLoader
@@ -15,17 +14,18 @@ from tqdm import tqdm
 import matplotlib.pyplot as plt
 
 
-FILE_PATH_TRAIN_DF = "./data/input_dfs/targets_df_train.sample.jsonl"
-FILE_PATH_TEST_DF = "./data/input_dfs/targets_df_train.sample2.jsonl"
+FILE_PATH_TRAIN_DF = "./data/input_dfs/targets_df_train.sample10k.jsonl"
+FILE_PATH_VALID_DF = "./data/input_dfs/targets_df_train.sample.jsonl"
 data_files = {
     "train": FILE_PATH_TRAIN_DF,
-    "test": FILE_PATH_TEST_DF,
+    "valid": FILE_PATH_VALID_DF,
 }
 FILE_PATH_TO_SAVE_MODEL = "./weights/my_model.pth"
-EPOCH_NUM = 100
+EPOCH_NUM = 10
 LEARNING_RATE = 0.00005
 BATCH_SIZE = 64
 PLOT_LOSS_AND_ACC = True
+EVALUTION_FREQ = 100  # batches
 
 checkpoint = "bert-base-multilingual-cased"
 
@@ -33,8 +33,6 @@ tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True)
 
 
-#  ❌ бажано щоб ви переглянули структуру нейронки, і в разі чого можливо змінили self.fc
-#     або логіку в forward
 class SiameseNNBatch(nn.Module):
     def __init__(self, checkpoint):
         super(SiameseNNBatch, self).__init__()
@@ -74,13 +72,9 @@ class SiameseNNBatch(nn.Module):
         proj_target_1 = self.fc(avg_target_1)
         proj_target_2 = self.fc(avg_target_2)
 
-        # Нормалізуйте вектори (потрібно для cosine_similarity)
-        normalized_sen_1 = F.normalize(proj_target_1, p=2, dim=-1)
-        normalized_sen_2 = F.normalize(proj_target_2, p=2, dim=-1)
-
         # Обчисліть cosine similarity
-        # TODO: see https://pytorch.org/docs/stable/generated/torch.nn.CosineEmbeddingLoss.html
-        cosine_sim = F.cosine_similarity(normalized_sen_1, normalized_sen_2, dim=-1)
+        # See also https://pytorch.org/docs/stable/generated/torch.nn.CosineEmbeddingLoss.html
+        cosine_sim = F.cosine_similarity(proj_target_1, proj_target_2, dim=-1)
         return cosine_sim
 
 
@@ -109,18 +103,20 @@ def my_collate_fn(features, return_tensors="pt"):
 
     # Виділення міток з функції
     labels = [float(x["label"]) for x in features]
-
-    # Додавання міток до окремого словника даних
     batch_labels = {"labels": torch.tensor(labels)}
 
     # Повернення окремих пакунків даних для бачів та міток
     return batch_inputs, batch_labels
 
 
-def train(model, train_dataloader, device, optimizer, criterion, num_epochs):
+def train(model, train_dataloader, device, optimizer, criterion, num_epochs, eval_dataloader=None):
+
     # Lists to store loss and accuracy values
     train_losses = []
     train_accuracies = []
+    
+    batches_since_eval = 0
+    batches_since_epoch = 0
 
     # Training loop
     for epoch in range(num_epochs):
@@ -153,6 +149,17 @@ def train(model, train_dataloader, device, optimizer, criterion, num_epochs):
             ).sum().item()
             total_samples += len(batch_labels)
 
+            # Evaluate the model every EVALUTION_FREQ batches
+            batches_since_eval += 1
+            batches_since_epoch += 1
+            if eval_dataloader is not None and batches_since_eval >= EVALUTION_FREQ:
+                epoch_loss = running_loss / batches_since_epoch
+                epoch_accuracy = correct_predictions / total_samples
+                eval_loss, eval_accuracy = evaluate_model(model, device, eval_dataloader, criterion)
+                print(f"Epoch {epoch+1}, Train_Loss: {epoch_loss:.2f}, Train_Accuracy: {epoch_accuracy:.2f}, "
+                      f"Eval_Loss: {eval_loss:.2f}, Eval_Accuracy: {eval_accuracy:.2f}")
+                batches_since_eval = 0
+
         # Calculate average loss and accuracy for this epoch
         epoch_loss = running_loss / len(train_dataloader)
         epoch_accuracy = correct_predictions / total_samples
@@ -161,10 +168,46 @@ def train(model, train_dataloader, device, optimizer, criterion, num_epochs):
         train_losses.append(epoch_loss)
         train_accuracies.append(epoch_accuracy)
 
+        # Compute the evaluation loss and accuracy
+        eval_loss, eval_accuracy = evaluate_model(model, device, eval_dataloader, criterion)
+
         # Print the average loss and accuracy for this epoch
-        print(f"Epoch {epoch+1}, Loss: {epoch_loss}, Accuracy: {epoch_accuracy}")
+        print(f"Epoch {epoch+1}, Train_Loss: {epoch_loss:.2f}, Train_Accuracy: {epoch_accuracy:.2f}, "
+              f"Eval_Loss: {eval_loss:.2f}, Eval_Accuracy: {eval_accuracy:.2f}")
 
     return model, train_losses, train_accuracies
+
+
+def evaluate_model(model, device, eval_dataloader, criterion):
+    if eval_dataloader is None:
+        return None, None
+
+    model.eval()  # Set the model to evaluation mode
+    running_loss = 0.0
+    correct_predictions = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for batch, batch_labels in eval_dataloader:
+            # Move batch data and labels to GPU
+            batch = {k: v.to(device) for k, v in batch.items()}
+            batch_labels = {k: v.to(device) for k, v in batch_labels.items()}
+
+            outputs = model(batch)
+            loss = criterion(outputs, batch_labels["labels"])
+            running_loss += loss.item()
+
+            # Calculate the number of correct predictions for accuracy
+            correct_predictions += (
+                (outputs > 0.5).long() == batch_labels["labels"]
+            ).sum().item()
+            total_samples += len(batch_labels)
+
+    # Calculate average loss and accuracy
+    eval_loss = running_loss / len(eval_dataloader)
+    eval_accuracy = correct_predictions / total_samples
+
+    return eval_loss, eval_accuracy
 
 
 def plot_loss_accuracy(train_losses, train_accuracies):
@@ -204,7 +247,7 @@ def main():
         collate_fn=my_collate_fn,
     )
     eval_dataloader = DataLoader(
-        targets_datasets["test"], batch_size=batch_size, collate_fn=my_collate_fn
+        targets_datasets["valid"], batch_size=batch_size, collate_fn=my_collate_fn
     )
 
     model = SiameseNNBatch(checkpoint)
@@ -221,7 +264,8 @@ def main():
 
     # Training ...
     model, train_losses, train_accuracies = train(
-        model, train_dataloader, device, optimizer, criterion, num_epochs=EPOCH_NUM
+        model, train_dataloader, device, optimizer, criterion, num_epochs=EPOCH_NUM,
+        eval_dataloader=eval_dataloader
     )
 
     # Save model and additional training information
@@ -240,11 +284,8 @@ def main():
     if PLOT_LOSS_AND_ACC:
         plot_loss_accuracy(train_losses, train_accuracies)
 
-    # Evaluate the model on test data
-    #eval_loss, eval_accuracy = evaluate_model(model, eval_dataloader, device, criterion)
-
-    print("Evaluation Loss:", eval_loss)
-    print("Evaluation Accuracy:", eval_accuracy)
+    #print("Test Loss:", eval_loss)
+    #print("Test Accuracy:", eval_accuracy)
 
 
 if __name__ == "__main__":
