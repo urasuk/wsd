@@ -22,8 +22,8 @@ data_files = {
     "test": FILE_PATH_TEST_DF,
 }
 FILE_PATH_TO_SAVE_MODEL = "./weights/my_model.pth"
-EPOCH_NUM = 10
-LEARNING_RATE = 0.001
+EPOCH_NUM = 100
+LEARNING_RATE = 0.00005
 BATCH_SIZE = 64
 PLOT_LOSS_AND_ACC = True
 
@@ -64,28 +64,22 @@ class SiameseNNBatch(nn.Module):
         # Get last hidden state from Bert output
         hidden_state = bert_outputs.last_hidden_state                   # (batch_size, seq_len, hidden_size)
 
-        # Get indeces of tokens of target word in sentence 1 and 2
-        target_indexes_1 = torch.where(target_1_mask == 1)
-        target_indexes_2 = torch.where(target_2_mask == 1)
-
-        # Extract hidden vectors of target's tokens for each sentence
-        #import ipdb; ipdb.set_trace()
-        target_hidden_vectors_sen_1 = hidden_state[target_indexes_1[0], target_indexes_1[1], :]
-        target_hidden_vectors_sen_2 = hidden_state[target_indexes_2[0], target_indexes_2[1], :]
-
-        # Avarage those hidden vectors for each sentence
-        average_target_sen_1 = torch.mean(target_hidden_vectors_sen_1, dim=0)
-        average_target_sen_2 = torch.mean(target_hidden_vectors_sen_2, dim=0)
+        # Compute average hidden state of target word in each sentence
+        sum_target_1 = (target_1_mask.unsqueeze(-1) * hidden_state).sum(dim=1)  # (batch_size, hidden_size)
+        sum_target_2 = (target_2_mask.unsqueeze(-1) * hidden_state).sum(dim=1)  # (batch_size, hidden_size)
+        avg_target_1 = sum_target_1 / target_1_mask.sum(dim=1).unsqueeze(-1)    # (batch_size, hidden_size)
+        avg_target_2 = sum_target_2 / target_1_mask.sum(dim=1).unsqueeze(-1)    # (batch_size, hidden_size)
 
         # Pass through the fully connected layers
-        decreased_target_sen_1 = self.fc(average_target_sen_1)
-        decreased_target_sen_2 = self.fc(average_target_sen_2)
+        proj_target_1 = self.fc(avg_target_1)
+        proj_target_2 = self.fc(avg_target_2)
 
         # Нормалізуйте вектори (потрібно для cosine_similarity)
-        normalized_sen_1 = F.normalize(decreased_target_sen_1, p=2, dim=-1)
-        normalized_sen_2 = F.normalize(decreased_target_sen_2, p=2, dim=-1)
+        normalized_sen_1 = F.normalize(proj_target_1, p=2, dim=-1)
+        normalized_sen_2 = F.normalize(proj_target_2, p=2, dim=-1)
 
         # Обчисліть cosine similarity
+        # TODO: see https://pytorch.org/docs/stable/generated/torch.nn.CosineEmbeddingLoss.html
         cosine_sim = F.cosine_similarity(normalized_sen_1, normalized_sen_2, dim=-1)
         return cosine_sim
 
@@ -139,36 +133,24 @@ def train(model, train_dataloader, device, optimizer, criterion, num_epochs):
         for batch, batch_labels in tqdm(
             train_dataloader, desc=f"Epoch {epoch+1}/{num_epochs}"
         ):
-            # for batch, batch_labels in train_dataloader:
             # Move batch data and labels to GPU
             batch = {k: v.to(device) for k, v in batch.items()}
             batch_labels = {k: v.to(device) for k, v in batch_labels.items()}
 
-            # Zero the gradients
             optimizer.zero_grad()
-
-            # Forward pass
             outputs = model(batch)
-            # print(outputs)
-
-            # Calculate the loss
-            import ipdb; ipdb.set_trace()
             loss = criterion(
                 outputs, batch_labels["labels"]
-            )  # Assuming you have labels in your batch
-
-            # Backward pass
+            )
             loss.backward()
-
-            # Update the parameters
             optimizer.step()
-
-            # Update the running loss
             running_loss += loss.item()
 
             # Calculate the number of correct predictions for accuracy
             # TODO: Outputs are float numbers that will never equal label (0 or 1) exactly.
-            correct_predictions += (outputs == batch_labels["labels"]).sum().item()
+            correct_predictions += (
+                (outputs > 0.5).float() == batch_labels["labels"]
+            ).sum().item()
             total_samples += len(batch_labels)
 
         # Calculate average loss and accuracy for this epoch
