@@ -14,6 +14,8 @@ import torch.optim as optim
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 
+import torch.optim.lr_scheduler as lr_scheduler_torch
+
 # targets_df_train_masked = Датасет, де леми ОГОРНУТІ в <ti></ti>
 DATASET_NAMES = [
     "targets_df_train_masked.jsonl",
@@ -21,8 +23,8 @@ DATASET_NAMES = [
 ]
 # PS: targets_df_train_masked - в цьому датасеті вже НЕМАЄ того багу: (коли я брав токени леми наприклад 'річка' з input_ids, то, якщо в речені було слово 'порічка' то брало і б частину  тоенгів з 'поРІЧКА')
 
-FILE_PATH_TRAIN_DF = f"./data/input_dfs/{DATASET_NAMES[0]}"
-FILE_PATH_VALID_DF = f"./data/input_dfs/{DATASET_NAMES[1]}"
+FILE_PATH_TRAIN_DF = f"./data/input_dfs/{DATASET_NAMES[0]}.jsonl"
+FILE_PATH_VALID_DF = f"./data/input_dfs/{DATASET_NAMES[1]}.jsonl"
 # FILE_PATH_TRAIN_DF = "/Users/yurayano/PycharmProjects/wsd/data_train/targets_df_train_masked.jsonl"
 # FILE_PATH_VALID_DF = "/Users/yurayano/PycharmProjects/wsd/data_train/targets_df_test_masked.jsonl"
 FILE_PATH_TO_SAVE_MODEL = "./weights/model_bert_with_tags_separate.pth"
@@ -375,6 +377,13 @@ def main():
 
     # Define your optimizer
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+
+    reduce_lr_scheduler = lr_scheduler_torch.ReduceLROnPlateau(optimizer,
+                                                            mode='min',
+                                                            factor=0.1, # new_lr = lr * factor
+                                                            patience=0,
+                                                            min_lr=min_lr)
 
     # Training ...
     model, train_losses, train_accuracies, eval_losses, eval_accuracies = train(

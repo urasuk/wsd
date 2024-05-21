@@ -6,8 +6,14 @@ import matplotlib.pyplot as plt
 # train_file_path = stats_data.train_file_path
 # test_file_path = stats_data.test_file_path
 
-train_file_path = stats_data.train_lem_file_path
-test_file_path = stats_data.test_lem_file_path
+# train_file_path = stats_data.train_lem_file_path
+# test_file_path = stats_data.test_lem_file_path
+# train_file_path = stats_data.train_forms_deduplicated_file_path
+# test_file_path = stats_data.test_forms_deduplicated_file_path
+
+train_file_path = stats_data.train_lem__dedup_file_path
+test_file_path = stats_data.test_lem__dedup_file_path
+
 
 
 def plot_pairs_count(sorted_pairs_counted, df_name):
@@ -128,3 +134,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+# [Тренувальний набір] Total number of Positive [✚] pairs: 318084
+# [Тренувальний набір] Total number of Negative [-] pairs: 320028
+# [Тестувальний набір] Total number of Positive [✚] pairs: 35200
+# [Тестувальний набір] Total number of Negative [-] pairs: 35357

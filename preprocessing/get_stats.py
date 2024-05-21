@@ -36,6 +36,56 @@ def extract_info(data):
     #         "прикладів": num_examples_list }
 
 
+# def plot_3d_histogram(data):
+#     fig = plt.figure()
+#     ax = fig.add_subplot(111, projection='3d')
+
+#     # Осі X, Y, Z
+#     x_data = list(data[:,0])  # Кількість сенсів
+#     y_data = list(data[:,1])  # Кількість прикладів вживання
+#     z_data = range(1, len(x_data) + 1)  # Кількість слів
+
+#     # Побудова графіку
+#     ax.bar3d(x_data, y_data, [0] * len(x_data), 1, 1, z_data, color='b', edgecolor='k')
+
+#     # Настройки вісей
+#     ax.set_xlabel('Кількість сенсів')
+#     ax.set_ylabel('Кількість прикладів вживання')
+#     ax.set_zlabel('Кількість слів')
+
+#     plt.show()
+
+import plotly.graph_objects as go
+
+def plot_3d_histogram(data):
+    # Розділення даних
+    x_data = data[:, 0]  # Кількість сенсів
+    y_data = data[:, 1]  # Кількість прикладів вживання
+    z_data = list(range(1, 100))  # Кількість слів
+    # z_data = list(range(1, len(x_data) + 1))  # Кількість слів
+
+    # Побудова графіку
+    fig = go.Figure(data=[go.Surface(z=z_data, x=x_data, y=y_data)])
+
+    # Налаштування вісей
+    fig.update_layout(scene=dict(
+        xaxis_title='Кількість сенсів',
+        yaxis_title='Кількість прикладів вживання',
+        zaxis_title='Кількість слів'
+    ))
+
+    # Відображення графіку
+    fig.show()
+
+def extract_info_3d(data):
+    final = []
+    for entry in data:
+        total_ex = 0
+        for synset in entry['synsets']:
+            total_ex += len(synset['examples'])
+        final.append([len(entry['synsets']), total_ex])
+    return np.array(final)
+
 def calc_stats(num_items_list):
     return {
         "mean": np.mean(num_items_list),
@@ -54,7 +104,7 @@ def print_results(stats, label=''):
     print("\n")
 
 
-def plot(data, label='', title=''):
+def plot(data, labelX='',labelY='', title=''):
     unique_values, counts = np.unique(data, return_counts=True)
 
     # 33884 for "synsets"    [ == len(data) ]  ===> Total number of entries
@@ -69,9 +119,9 @@ def plot(data, label='', title=''):
     
     plt.bar(unique_values, counts, width=width, color='blue', alpha=0.7)
     plt.title(title)
-    plt.xlabel(label)
+    plt.xlabel(labelX)
     # plt.ylabel("Number of lemmas")
-    plt.ylabel("К-сть лем")
+    plt.ylabel(labelY)
     
     # Add labels above each bar
     for i, count in enumerate(counts):
@@ -109,12 +159,20 @@ def main():
 
     info = extract_info(data)
 
+    info3d = extract_info_3d(data)
+    plot_3d_histogram(info3d)
+
     for label, num_item_list in info.items():
         stats = calc_stats(num_item_list)
         print_results(stats, label)
         # plot(num_item_list, label=f'Number of {label} per lemma', title=f'Histogram of {label} per lemma')
-        label_text = "сенсів" if label == "synsets" else "прикладів"
-        plot(num_item_list, label=f'К-сть {label_text} на лему', title=f'Гістограма к-сті {label_text} на лему')
+        label_text_X = "Кількість сенсів" if label == "synsets" else "Кількість прикладів"
+        label_text_Y = "Кількість лем" if label == "synsets" else "Кількість сенсів"
+        label_title = "Кількісний розподіл лем за кількістю сенсів" if label_title == "synsets" else "Кількісний розподіл сенсів за кількістю прикладів вживання"
+        plot(num_item_list, labelX=label_text_X, labelY = label_text_Y, title=label_title) 
+        # f'Гістограма к-сті {label_text} на {label_text2}'
+
+
 
 
     print(f"Total pairs number: {get_total_pairs_num(data)}")

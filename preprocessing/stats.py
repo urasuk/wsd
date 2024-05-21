@@ -17,11 +17,21 @@ test_file_path = "data/final_results/sum14_pairs-test.jsonl"
 train_forms_file_path = "data/final_results/sum14_pairs_forms-train.jsonl"
 test_forms_file_path =  "data/final_results/sum14_pairs_forms-test.jsonl"
 
+train_forms_deduplicated_file_path = "data/final_results/sum14_pairs_forms_deduplicated-train.jsonl"
+test_forms_deduplicated_file_path =  "data/final_results/sum14_pairs_forms_deduplicated-test.jsonl"
+
+
 train_lem_file_path = "data/final_results/sum14_pairs_lem-train.jsonl"
 train_not_lem_file_path = "data/final_results/sum14_pairs_not_lem-train.jsonl"
 
 test_lem_file_path =  "data/final_results/sum14_pairs_lem-test.jsonl"
 test_not_lem_file_path =  "data/final_results/sum14_pairs_not_lem-test.jsonl"
+
+train_lem__dedup_file_path = "data/final_results/sum14_pairs_lem-dedup-train.jsonl"
+train_not_lem__dedup_file_path = "data/final_results/sum14_pairs_not_lem-dedup-train.jsonl"
+
+test_lem__dedup_file_path =  "data/final_results/sum14_pairs_lem-dedup-test.jsonl"
+test_not_lem__dedup_file_path =  "data/final_results/sum14_pairs_not_lem-dedup-test.jsonl"
 
 filtered_extra_file_path = "data/final_results/sum14_filtered-extra.json"
 

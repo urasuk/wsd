@@ -27,9 +27,15 @@ import matplotlib.pyplot as plt
 # train_file_path = stats_data.train_file_path
 # test_file_path = stats_data.test_file_path
 
-input_file_path = stats_data.pairs_forms_file_path
-train_file_path = stats_data.train_forms_file_path
-test_file_path = stats_data.test_forms_file_path
+
+# input_file_path = stats_data.pairs_forms_file_path
+# train_file_path = stats_data.train_forms_file_path
+# test_file_path = stats_data.test_forms_file_path
+
+input_file_path = "data/final_results/sum14_pairs_forms_deduplicated.jsonl"
+train_file_path = stats_data.train_forms_deduplicated_file_path
+test_file_path = stats_data.test_forms_deduplicated_file_path
+
 
 # Set the seed for reproducibility
 random.seed(42)
@@ -39,9 +45,11 @@ def plot_pos_neg_quantity(pos_pairs_quantity, neg_pairs_quantity):
         raise ValueError("Both lists should have the same length.")
     
     plt.plot(pos_pairs_quantity, neg_pairs_quantity, marker='o', linestyle='-', color='r')
-    plt.xlabel("Positive pairs quantity")
-    plt.ylabel("Negative pairs quantity")
-    plt.title("Each point on plot is Lemma a with some + and - usage examples")
+    plt.xlabel("Кількість позитивних пар")
+    plt.ylabel("Кількість негативних пар")
+    plt.title("Графік залежності кількості позитивних та негативних пар для кожної леми")
+    # Each point on plot is Lemma a with some + and - usage examples
+
     plt.grid(True)
     plt.show()
 
@@ -164,11 +172,11 @@ def equalize_pos_neg_examples(lemmas_extended, positive_examples_n, df_type):
 
 
 # ! у тесті не має бути тих лем що в трейн 
-def split_jsonl(input_file, train_file, test_file, split_ratio=0.75):
+def split_jsonl(input_file, train_file, test_file, split_ratio=0.90):
     with open(input_file, 'r', encoding='utf-8') as file:
         lines = [json.loads(line) for line in file]
         
-    lemmas_sorted, total_pos_n, total_neg_n = count_pos_neg_pairs(lines)  
+    lemmas_sorted, total_pos_n, total_neg_n = count_pos_neg_pairs(lines, True)  
     #% Процес формування train/test наборів даних повинен відштовхуватися від к-сті ПОЗИТИВНИХ пар,
     #% а оскільки к-сть негативних пар у нас достатньо, то ми можемо їх відкидати, для забезпечення балансу + та -
     #% У додаток в тренувальному наборі, як згадувалося вище, має бути леми з великою к-стю позитивних пар

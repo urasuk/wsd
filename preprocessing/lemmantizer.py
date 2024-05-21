@@ -10,15 +10,23 @@ input_file_path = stats_data.lcopf_forms_found_file_path
 # pairs_file_path = stats_data.pairs_file_path
 
 # good
-train_forms_file_path = stats_data.train_forms_file_path
-test_forms_file_path = stats_data.test_forms_file_path
+# train_forms_file_path = stats_data.train_forms_file_path
+# test_forms_file_path = stats_data.test_forms_file_path
+train_forms_file_path = stats_data.train_forms_deduplicated_file_path
+test_forms_file_path = stats_data.test_forms_deduplicated_file_path
 
 
-train_good_file_path = stats_data.train_lem_file_path
-train_bad_file_path = stats_data.train_not_lem_file_path 
+# train_good_file_path = stats_data.train_lem_file_path
+# train_bad_file_path = stats_data.train_not_lem_file_path 
 
-test_good_file_path = stats_data.test_lem_file_path
-test_bad_file_path = stats_data.test_not_lem_file_path 
+# test_good_file_path = stats_data.test_lem_file_path
+# test_bad_file_path = stats_data.test_not_lem_file_path 
+
+train_good_file_path = stats_data.train_lem__dedup_file_path
+train_bad_file_path = stats_data.train_not_lem__dedup_file_path 
+
+test_good_file_path = stats_data.test_lem__dedup_file_path
+test_bad_file_path = stats_data.test_not_lem__dedup_file_path 
 
 
 class Lemmatizer:
@@ -286,3 +294,8 @@ def main():
 
 if __name__ == '__main__':
     main()
+
+##
+# Tddest: good [70557] | bad [[4981]]
+# Train: good [638112] | bad [[41720]]
+# Total: 708,669
