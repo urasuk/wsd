@@ -1,0 +1,292 @@
+#!/usr/bin/env python3
+# !pip install datasets evaluate transformers[sentencepiece]
+
+import os
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from transformers import AutoModel, AutoTokenizer
+from datasets import load_dataset
+from transformers import DataCollatorWithPadding
+from torch.utils.data import DataLoader
+import torch.optim as optim
+from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+
+FILE_PATH_TRAIN_DF = "./data/input_dfs/targets_df_train.sample10k.jsonl"
+FILE_PATH_VALID_DF = "./data/input_dfs/targets_df_train.sample.jsonl"
+data_files = {
+    "train": FILE_PATH_TRAIN_DF,
+    "valid": FILE_PATH_VALID_DF,
+}
+FILE_PATH_TO_SAVE_MODEL = "./weights/my_model.pth"
+EPOCH_NUM = 10
+LEARNING_RATE = 0.00005
+BATCH_SIZE = 64
+PLOT_LOSS_AND_ACC = True
+EVALUTION_FREQ = 100  # batches
+
+checkpoint = "bert-base-multilingual-cased"
+
+tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+data_collator = DataCollatorWithPadding(tokenizer=tokenizer, padding=True)
+
+
+class SiameseNNBatch(nn.Module):
+    def __init__(self, checkpoint):
+        super(SiameseNNBatch, self).__init__()
+        self.bert = AutoModel.from_pretrained(checkpoint)
+        self.tokenizer = AutoTokenizer.from_pretrained(checkpoint)
+        self.fc = nn.Sequential(nn.Linear(self.bert.config.hidden_size, 64))
+        # nn.ReLU(),
+        # nn.Linear(64, 1),
+        # nn.Sigmoid())
+
+    def forward(self, batch):
+        input_ids = batch["input_ids"]
+        token_type_ids = batch["token_type_ids"]
+        attention_mask = batch["attention_mask"]
+
+        # Mask that tells indeces of tokens of target word in a sentence:
+        # [0, 0, 0, 1, 1, 0, 0] -> [3, 4]
+        target_1_mask = batch["target_1_mask"]
+        target_2_mask = batch["target_2_mask"]
+
+        bert_outputs = self.bert(
+            input_ids=input_ids,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+        )
+
+        # Get last hidden state from Bert output
+        hidden_state = bert_outputs.last_hidden_state                   # (batch_size, seq_len, hidden_size)
+
+        # Compute average hidden state of target word in each sentence
+        sum_target_1 = (target_1_mask.unsqueeze(-1) * hidden_state).sum(dim=1)  # (batch_size, hidden_size)
+        sum_target_2 = (target_2_mask.unsqueeze(-1) * hidden_state).sum(dim=1)  # (batch_size, hidden_size)
+        avg_target_1 = sum_target_1 / target_1_mask.sum(dim=1).unsqueeze(-1)    # (batch_size, hidden_size)
+        avg_target_2 = sum_target_2 / target_1_mask.sum(dim=1).unsqueeze(-1)    # (batch_size, hidden_size)
+
+        # Pass through the fully connected layers
+        proj_target_1 = self.fc(avg_target_1)
+        proj_target_2 = self.fc(avg_target_2)
+
+        # Обчисліть cosine similarity
+        # See also https://pytorch.org/docs/stable/generated/torch.nn.CosineEmbeddingLoss.html
+        cosine_sim = F.cosine_similarity(proj_target_1, proj_target_2, dim=-1)
+        return cosine_sim
+
+
+def my_collate_fn(features, return_tensors="pt"):
+    def select_columns(xs, columns):
+        result = []
+        for x in xs:
+            result.append({k: x[k] for k in columns})
+        return result
+
+    def make_mask(batch, feature):
+        mask = torch.zeros_like(batch["input_ids"])
+        for i, xs in enumerate(features):
+            mask[i][xs[feature]] = 1
+        return mask
+
+    inputs = select_columns(features, ["input_ids", "attention_mask", "token_type_ids"])
+    # labels = select_columns(features, ['sent1_target_tokens_indexes', 'sent2_target_tokens_indexes'])
+    batch_inputs = data_collator(inputs)
+    batch_inputs["target_1_mask"] = make_mask(
+        batch_inputs, "sent1_target_tokens_indexes"
+    )
+    batch_inputs["target_2_mask"] = make_mask(
+        batch_inputs, "sent2_target_tokens_indexes"
+    )
+
+    # Виділення міток з функції
+    labels = [float(x["label"]) for x in features]
+    batch_labels = {"labels": torch.tensor(labels)}
+
+    # Повернення окремих пакунків даних для бачів та міток
+    return batch_inputs, batch_labels
+
+
+def train(model, train_dataloader, device, optimizer, criterion, num_epochs, eval_dataloader=None):
+
+    # Lists to store loss and accuracy values
+    train_losses = []
+    train_accuracies = []
+    
+    batches_since_eval = 0
+    batches_since_epoch = 0
+
+    # Training loop
+    for epoch in range(num_epochs):
+        model.train()  # Set the model to training mode
+        running_loss = 0.0
+        correct_predictions = 0
+        total_samples = 0
+
+        # Iterate over the training dataset
+        for batch, batch_labels in tqdm(
+            train_dataloader, desc=f"Epoch {epoch+1}/{num_epochs}"
+        ):
+            # Move batch data and labels to GPU
+            batch = {k: v.to(device) for k, v in batch.items()}
+            batch_labels = {k: v.to(device) for k, v in batch_labels.items()}
+
+            optimizer.zero_grad()
+            outputs = model(batch)
+            loss = criterion(
+                outputs, batch_labels["labels"]
+            )
+            loss.backward()
+            optimizer.step()
+            running_loss += loss.item()
+
+            # Calculate the number of correct predictions for accuracy
+            # TODO: Outputs are float numbers that will never equal label (0 or 1) exactly.
+            correct_predictions += (
+                (outputs > 0.5).float() == batch_labels["labels"]
+            ).sum().item()
+            total_samples += len(batch_labels)
+
+            # Evaluate the model every EVALUTION_FREQ batches
+            batches_since_eval += 1
+            batches_since_epoch += 1
+            if eval_dataloader is not None and batches_since_eval >= EVALUTION_FREQ:
+                epoch_loss = running_loss / batches_since_epoch
+                epoch_accuracy = correct_predictions / total_samples
+                eval_loss, eval_accuracy = evaluate_model(model, device, eval_dataloader, criterion)
+                print(f"Epoch {epoch+1}, Train_Loss: {epoch_loss:.2f}, Train_Accuracy: {epoch_accuracy:.2f}, "
+                      f"Eval_Loss: {eval_loss:.2f}, Eval_Accuracy: {eval_accuracy:.2f}")
+                batches_since_eval = 0
+
+        # Calculate average loss and accuracy for this epoch
+        epoch_loss = running_loss / len(train_dataloader)
+        epoch_accuracy = correct_predictions / total_samples
+
+        # Append loss and accuracy values to lists
+        train_losses.append(epoch_loss)
+        train_accuracies.append(epoch_accuracy)
+
+        # Compute the evaluation loss and accuracy
+        eval_loss, eval_accuracy = evaluate_model(model, device, eval_dataloader, criterion)
+
+        # Print the average loss and accuracy for this epoch
+        print(f"Epoch {epoch+1}, Train_Loss: {epoch_loss:.2f}, Train_Accuracy: {epoch_accuracy:.2f}, "
+              f"Eval_Loss: {eval_loss:.2f}, Eval_Accuracy: {eval_accuracy:.2f}")
+
+    return model, train_losses, train_accuracies
+
+
+def evaluate_model(model, device, eval_dataloader, criterion):
+    if eval_dataloader is None:
+        return None, None
+
+    model.eval()  # Set the model to evaluation mode
+    running_loss = 0.0
+    correct_predictions = 0
+    total_samples = 0
+
+    with torch.no_grad():
+        for batch, batch_labels in eval_dataloader:
+            # Move batch data and labels to GPU
+            batch = {k: v.to(device) for k, v in batch.items()}
+            batch_labels = {k: v.to(device) for k, v in batch_labels.items()}
+
+            outputs = model(batch)
+            loss = criterion(outputs, batch_labels["labels"])
+            running_loss += loss.item()
+
+            # Calculate the number of correct predictions for accuracy
+            correct_predictions += (
+                (outputs > 0.5).long() == batch_labels["labels"]
+            ).sum().item()
+            total_samples += len(batch_labels)
+
+    # Calculate average loss and accuracy
+    eval_loss = running_loss / len(eval_dataloader)
+    eval_accuracy = correct_predictions / total_samples
+
+    return eval_loss, eval_accuracy
+
+
+def plot_loss_accuracy(train_losses, train_accuracies):
+    # Plot loss and accuracy
+    plt.figure(figsize=(10, 5))
+    plt.subplot(1, 2, 1)
+    plt.plot(train_losses, label="Train Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training Loss")
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(train_accuracies, label="Train Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Training Accuracy")
+    plt.legend()
+    plt.show()
+
+
+def main():
+    os.makedirs(os.path.dirname(FILE_PATH_TO_SAVE_MODEL), exist_ok=True)
+
+    # Load the dataset
+    targets_datasets = load_dataset(
+        "json",
+        data_files=data_files,
+    )
+
+    batch_size = BATCH_SIZE  # 64 ⛔️ colab: OutOfMemoryError: CUDA out of memory.
+
+    train_dataloader = DataLoader(
+        targets_datasets["train"],
+        shuffle=True,
+        batch_size=batch_size,
+        collate_fn=my_collate_fn,
+    )
+    eval_dataloader = DataLoader(
+        targets_datasets["valid"], batch_size=batch_size, collate_fn=my_collate_fn
+    )
+
+    model = SiameseNNBatch(checkpoint)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Move model to GPU
+    model.to(device)
+
+    # Define your loss function
+    criterion = nn.MSELoss()
+
+    # Define your optimizer
+    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+
+    # Training ...
+    model, train_losses, train_accuracies = train(
+        model, train_dataloader, device, optimizer, criterion, num_epochs=EPOCH_NUM,
+        eval_dataloader=eval_dataloader
+    )
+
+    # Save model and additional training information
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "train_losses": train_losses,
+            "train_accuracies": train_accuracies,
+        },
+        FILE_PATH_TO_SAVE_MODEL,
+    )
+
+    # SAVE MODEL
+    # torch.save(model.state_dict(), FILE_PATH_TO_SAVE_MODEL)
+
+    if PLOT_LOSS_AND_ACC:
+        plot_loss_accuracy(train_losses, train_accuracies)
+
+    #print("Test Loss:", eval_loss)
+    #print("Test Accuracy:", eval_accuracy)
+
+
+if __name__ == "__main__":
+    main()
